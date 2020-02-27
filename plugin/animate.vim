@@ -70,6 +70,7 @@ function! animate#window_delta(width_delta, height_delta) abort
   function! animation.step(timer)
     " Store the target window so we can preserve the current window
     let current_window = winnr()
+    let start = animate#time()
 
     " If the current window is different from the target window then we want
     " to focus the current window
@@ -82,7 +83,7 @@ function! animate#window_delta(width_delta, height_delta) abort
     endif
 
     " Calculate the time elapsed
-    let elapsed = min([float2nr(g:animate#duration), float2nr(animate#time() - self.start_time)])
+    let elapsed = min([float2nr(g:animate#duration), float2nr(start - self.start_time)])
 
     " Calculate the appropriate width for this amount of elapsed time
     let width = float2nr(g:Animate#Ease(elapsed, self.width_initial, self.width_delta, g:animate#duration))
@@ -106,8 +107,14 @@ function! animate#window_delta(width_delta, height_delta) abort
       " Distribute space and clean up our changes to windows
       if g:animate#distribute_space
         " Store the widths
-        noautocmd windo if ! &winfixwidth | let nowinfixwidths[winnr()] = 1 | set winfixwidth | endif
-        " Restore focus
+        let tabnr = tabpagenr()
+        let wins = range(tabnr, tabpagewinnr(tabnr, '$'))
+        for win in wins
+          if gettabwinvar(tabnr, win, '&winfixwidth')
+            let nowinfixwidths[win] = 1
+            call settabwinvar(tabnr, win, '&winfixwidth', 1)
+          endif
+        endfor
         call animate#window_focus(self.target_window)
         if winfixheight
           noautocmd wincmd =
@@ -116,8 +123,14 @@ function! animate#window_delta(width_delta, height_delta) abort
           noautocmd wincmd =
           set nowinfixheight
         endif
-        " Restore the widths
-        noautocmd windo if has_key(nowinfixwidths, winnr()) | set nowinfixwidth | endif
+
+        let tabnr = tabpagenr()
+        let wins = range(tabnr, tabpagewinnr(tabnr, '$'))
+        for win in wins
+          if has_key(nowinfixwidths, winnr())
+            call settabwinvar(tabnr, win, '&winfixwidth', 0)
+          endif
+        endfor
        
         " Restore focus
         call animate#window_focus(self.target_window)
@@ -132,18 +145,31 @@ function! animate#window_delta(width_delta, height_delta) abort
       " Distribute space and clean up our changes to windows
       if g:animate#distribute_space
         " Store the heights
-        noautocmd windo if ! &winfixheight | let nowinfixheights[winnr()] = 1 | set winfixheight | endif
+        let tabnr = tabpagenr()
+        let wins = range(tabnr, tabpagewinnr(tabnr, '$'))
+        for win in wins
+          if gettabwinvar(tabnr, win, '&winfixheight')
+            let nowinfixheights[win] = 1
+            call settabwinvar(tabnr, win, '&winfixheight', 1)
+          endif
+        endfor
         " Restore focus
         call animate#window_focus(self.target_window)
         if winfixwidth
-          wincmd =
+          noautocmd wincmd =
         else
           set winfixwidth
           noautocmd wincmd =
           set nowinfixwidth
         endif
         " Restore the heights
-        noautocmd windo if has_key(nowinfixheights, winnr()) | set nowinfixheight | endif
+        let tabnr = tabpagenr()
+        let wins = range(tabnr, tabpagewinnr(tabnr, '$'))
+        for win in wins
+          if has_key(nowinfixheights, winnr())
+            call settabwinvar(tabnr, win, '&winfixheight', 0)
+          endif
+        endfor
         " Restore focus
         call animate#window_focus(self.target_window)
       endif
@@ -151,8 +177,9 @@ function! animate#window_delta(width_delta, height_delta) abort
 
     " If the time elapsed is less than the animation duration then schedule
     " anoanother step, otherwise remove the timer id
+    let diff = 16 - float2nr(animate#time() - start)
     if elapsed < g:animate#duration
-      let g:animate#timer_ids[self.target_window] = timer_start(16, self.step)
+      let g:animate#timer_ids[self.target_window] = timer_start(max([diff, 0]), self.step)
     else
       let g:animate#timer_ids[self.target_window] = 0
     endif
